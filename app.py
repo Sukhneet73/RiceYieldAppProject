@@ -7,8 +7,11 @@ import shap
 import os
 from dotenv import load_dotenv
 
+# Get the directory where this script is located
+BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+
 # Load OpenAI key (optional)
-load_dotenv()
+load_dotenv(os.path.join(BASE_DIR, ".env"))
 OPENAI_KEY = os.getenv("OPENAI_API_KEY")
 use_openai = bool(OPENAI_KEY)
 
@@ -16,14 +19,14 @@ try:
     import openai
     if use_openai:
         openai.api_key = OPENAI_KEY
-except:
+except ImportError:
     use_openai = False
 
-# Load trained model (updated paths)
-with open("../rice_model.pkl", "rb") as f:
+# Load trained model
+with open(os.path.join(BASE_DIR, "rice_model.pkl"), "rb") as f:
     model = pickle.load(f)
 
-with open("../feature_names.json", "r") as f:
+with open(os.path.join(BASE_DIR, "feature_names.json"), "r") as f:
     feature_names = json.load(f)
 
 # SHAP explainer
@@ -52,7 +55,7 @@ def farmer_friendly_explanation(feature_imp):
             if val < 0:
                 tips.append("💡 Apply recommended fertilizer doses for better yield")
 
-    # Add two newlines after each note and tip to force Markdown line breaks
+    # Two newlines to force Markdown line breaks
     notes_text = "\n\n".join(notes)
     tips_text = "\n\n".join(tips)
     return f"{notes_text}\n\n**Tips:**\n{tips_text}"
@@ -62,16 +65,15 @@ def predict(rainfall, temperature, soil_type, fertilizer):
     df = pd.DataFrame([[rainfall, temperature, soil_type, fertilizer]], columns=feature_names)
     pred = model.predict(df)[0]
     shap_values = explainer.shap_values(df)
-    
+
     if isinstance(shap_values, list):
         shap_arr = np.array(shap_values)[0][0]
     else:
         shap_arr = shap_values[0] if shap_values.shape[0] == 1 else shap_values[0]
-    
+
     feature_imp = {name: float(round(float(v), 2)) for name, v in zip(feature_names, shap_arr)}
-    
     note = farmer_friendly_explanation(feature_imp)
-    
+
     return round(float(pred), 2), note
 
 # Gradio UI
@@ -90,7 +92,7 @@ outputs = [
 title = "🌾 Rice Yield Predictor"
 desc = "Enter field values. The app predicts yield and shows interactive tips for farmers."
 
-iface = gr.Interface(fn=predict, inputs=inputs, outputs=outputs, title=title, description=desc,allow_flagging="never")
+iface = gr.Interface(fn=predict, inputs=inputs, outputs=outputs, title=title, description=desc, allow_flagging="never")
 
 if __name__ == "__main__":
     iface.launch()
